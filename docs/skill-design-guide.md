@@ -89,8 +89,8 @@ made explicit and repeated at the points that matter:
 | --- | --- |
 | Baseline search always | The literal user query is always one of the parallel searches, never replaced by generated variations. |
 | Predicates from the table only | Never invent a predicate that isn't in the Predicate Reference Table. |
-| Names, not explanations | Return entry names only; do not justify why an entry was selected. |
-| Attempt first, clarify never | Never open with "I cannot answer that" or ask a clarifying question before searching. |
+| Names, not explanations | Return the stable `entry_name` only, never `display_name` (which isn't unique) and never a justification for why an entry was selected. |
+| Attempt first, clarify only if truly ambiguous | Always search before responding; only fall back to a clarifying question if the results themselves remain genuinely ambiguous afterward — don't guess at intent as a substitute for asking. |
 
 ## 4. Phase isolation
 
@@ -103,10 +103,11 @@ executor every stage's instructions up front. Expose only:
 - and a pointer to the next stage — without the next stage's content.
 
 Advancing to the next stage happens only after the current stage's output is
-accepted (a gate/judge check), not by the executor reading ahead. This
-matters because early visibility into a later stage measurably changes
+accepted (a gate/judge check), not by the executor reading ahead. The design
+rationale — not an experimentally measured result, just the reasoning behind
+the rule — is that early visibility into a later stage plausibly changes
 behavior in the current one (rushing discovery because the destination is
-already known, designing around unverified state, etc.) — withholding the
+already known, designing around unverified state, etc.), so withholding the
 future stage's *content*, not just instructing the model not to peek, is
 what prevents it.
 
@@ -133,8 +134,37 @@ Every edit to a skill gets a deletion test before it's considered done:
    behavior, another skill's instructions), delete it rather than
    re-stating it.
 
-This repo doesn't yet have an automated eval harness for skills, so step 2
-today means manually re-running the worked examples in
-`references/examples.md` and confirming the extracted predicates and
-returned entries are unchanged. If an eval harness is added later, this is
-the hook it should run against.
+This repo doesn't yet have a general automated eval harness for skills.
+`samples/discovery/tests/test_instruction_regression.py` is a first,
+narrow instance of step 2 for that one skill: it asserts the instruction the
+agent actually receives (SKILL.md + references/, concatenated by
+`instruction.py`) still contains every predicate, rule, example, and step
+that existed in the pre-split file, so the structural split in this guide's
+Section 2 is checked rather than assumed. It doesn't call the model or the
+live search tool — it's a text-level check that the refactor didn't drop
+content, not a behavioral eval of search quality. A broader harness, if
+added later, is the hook pruning should run against.
+
+## 6. Integration boundary
+
+A skill that retrieves or ranks information is not thereby authorized to
+decide what happens to that information. Keep these as separate decisions,
+made by separate parts of the system:
+
+- **Search relevance** — does this result match the query? This skill's job.
+- **Memory relevance / provenance** — should this result be trusted enough
+  to promote into persistent, durable knowledge? Not this skill's job.
+- **Execution authority** — is this skill, or any action it surfaces,
+  authorized to run against production state? Not this skill's job, and
+  not something a model choosing to invoke a skill should be able to confer
+  on its own (see Section 1's trigger table).
+
+`samples/discovery` should stay scoped to the first of these: interpret a
+query, construct search expressions, retrieve candidate entries, rank them,
+return `entry_name`s. A broader orchestration layer that decides which
+skills or evidence to use for a task, or whether a given result is
+trustworthy enough to act on, sits above this skill and consumes its output
+as unverified candidates — it should not be implemented inside this skill,
+and this skill should not be extended to do that layer's job itself. An
+exact-matching result can still have weak provenance; returning it is
+correct, treating it as verified knowledge without a separate check is not.

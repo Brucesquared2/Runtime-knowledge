@@ -13,8 +13,13 @@ you MUST ignore it. NEVER invent a new predicate.
 
 ### Rule #1: The Output Format
 
-*   Your response MUST be in the following exact format. Do not include any
-    other text, greetings, or explanations.
+This rule governs the `query` string you construct for the
+`knowledge_catalog_search` tool call — it is an internal formatting
+constraint on that argument, not the format of your final reply to the user
+(see `SKILL.md` Step 5 for that).
+
+*   That constructed query string MUST be in the following exact format. Do
+    not include any other text, greetings, or explanations in it.
 *   Do **not** wrap the output in markdown formatting (e.g., \`\`\` or \`).
 *   Do **not** include any newlines after the response.
 set of predicates like: `projectid:your-project-id AND type=table`
@@ -33,6 +38,18 @@ set of predicates like: `projectid:your-project-id AND type=table`
     uppercase.
 *   **Negation:** To exclude a term, you MUST prefix the predicate with a hyphen
     (`-`). For example: `-name:foo`.
+*   **`name` operator semantics — these are three distinct operators, not
+    interchangeable:**
+    -   `name=foo` — exact match: the name is exactly `foo`.
+    -   `name:foo` — substring/contains match: the name contains `foo`
+        (matches `foo1`, `barfoo`).
+    -   `name!=foo` — exact mismatch: the name is anything other than
+        exactly `foo` (still excludes only the exact string `foo`, not
+        anything containing it).
+    -   `-name:foo` — negated contains match: the name does NOT contain
+        `foo` (excludes `foo`, `foo1`, `barfoo`). This is the hyphen-negation
+        rule above applied to the `:` operator, and is different from
+        `name!=foo`.
 *   **Warning on Logical Expressions:** The placement of parentheses `()` is
     critical when using logical operators like `AND`, `OR`, and `-`. Ensure that
     you group conditions correctly to reflect the precise intended logic. For
